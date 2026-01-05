@@ -1,0 +1,13 @@
+[project]
+name = "appium-stdio-mcp"
+version = "0.1.0"
+description = "Claude Code CLI mcp for connecting to Fortinet mobile device farm. Build eyes for your LLM"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "appium-python-client==5.2.4",
+    "mcp==1.25.0",
+    "pillow==12.1.0",
+    "pyyaml==6.0.3",
+    "selenium==4.39.0",
+]
