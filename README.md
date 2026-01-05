@@ -7,10 +7,10 @@ It supports:
 - Screenshot + XML return after each action
 
 ## Install
-pip install --upgrade uv
-uv sync
-source .venv/bin/activate      # macOS / Linux
-.venv\Scripts\activate         # Windows
+- pip install --upgrade uv
+- uv sync
+- source .venv/bin/activate      # macOS / Linux
+- .venv\Scripts\activate         # Windows
 
 ## Run
 python server.py
