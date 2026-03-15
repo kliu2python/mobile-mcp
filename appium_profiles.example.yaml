@@ -1,0 +1,22 @@
+profiles:
+  cloud-base:
+    platform: iOS
+    server_url: ${APPIUM_SERVER_URL}
+    capabilities:
+      gads:clientSecret: ${GADS_CLIENT_SECRET}
+
+  ios-local:
+    extends: cloud-base
+    platform: iOS
+    capabilities:
+      platformName: iOS
+      automationName: XCUITest
+      udid: ${IOS_UDID}
+
+  android-local:
+    platform: Android
+    server_url: ${APPIUM_SERVER_URL}
+    capabilities:
+      platformName: Android
+      automationName: UiAutomator2
+      udid: ${ANDROID_UDID}
