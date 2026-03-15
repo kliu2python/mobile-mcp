@@ -1,4 +1,5 @@
-from pathlib import Path 
+from pathlib import Path
+import os
 import base64
 from io import BytesIO
 import time
@@ -11,6 +12,7 @@ from appium_driver import (
     get_driver,
     stop_session
 )
+from appium_config import load_profiles, get_profile, AppiumConfigError
 from utils import (
     resize_image,
     get_current_timestamp,
@@ -23,6 +25,7 @@ from actions import execute_with_retry
 
 
 mcp = FastMCP("appium-stdio-mcp")
+LAST_UI_TREE = None
 
 
 def collect_artifacts(driver):
@@ -47,45 +50,68 @@ def get_bounds_by_element_id(element_id):
     return None
 
 @mcp.tool()
-def start_default_ios_appium_session():
-    _platform = "iOS"
-    _server_url = "http://10.160.13.112:8080/grid"
-    _capabilities = {
-        "udid": "f67d7ce40691d9ab546d7362a4cc7a6182870de2",
-        "gads:clientSecret": "YmLZZlF6PnduXxSZvF3sTEeHIjT2XKKuA2UBoaqT4E0=",
-        "platformName": "iOS",
-        "automationName": "XCUITest"
-    }
-    start_session(_platform, _server_url, _capabilities)
-    return "default ios appium session started"
+def list_appium_profiles(config_path: str | None = None):
+    """List available Appium profiles from config file."""
+    try:
+        profiles = load_profiles(config_path=config_path)
+        return {
+            "status": "ok",
+            "profiles": sorted(profiles.keys()),
+        }
+    except AppiumConfigError as e:
+        return {"status": "failed", "reason": str(e)}
 
 @mcp.tool()
-def start_default_android_appium_session():
-    _platform = "Android"
-    _server_url = "http://10.160.13.112:8080/grid"
-    _capabilities = {
-        "udid": "8BEX18XP6",
-        "gads:clientSecret": "YmLZZlF6PnduXxSZvF3sTEeHIjT2XKKuA2UBoaqT4E0=",
-        "platformName": "Android",
-        "automationName": "UiAutomator2"
+def start_appium_session_with_profile(
+    profile_name: str,
+    config_path: str | None = None,
+    capabilities_override: dict | None = None,
+):
+    """Start session from named profile, with optional capability overrides."""
+    try:
+        profile = get_profile(profile_name, config_path=config_path)
+    except AppiumConfigError as e:
+        return {"status": "failed", "reason": str(e)}
+
+    capabilities = dict(profile["capabilities"])
+    if capabilities_override:
+        capabilities.update(capabilities_override)
+
+    start_session(profile["platform"], profile["server_url"], capabilities)
+    return {
+        "status": "ok",
+        "profile": profile_name,
+        "platform": profile["platform"],
+        "server_url": profile["server_url"],
     }
-    start_session(_platform, _server_url, _capabilities)
-    return "default android appium session started"
+
+
+@mcp.tool()
+def start_default_ios_appium_session(config_path: str | None = None):
+    profile_name = os.getenv("APPIUM_MCP_DEFAULT_IOS_PROFILE", "ios-local")
+    return start_appium_session_with_profile(profile_name, config_path=config_path)
+
+
+@mcp.tool()
+def start_default_android_appium_session(config_path: str | None = None):
+    profile_name = os.getenv("APPIUM_MCP_DEFAULT_ANDROID_PROFILE", "android-local")
+    return start_appium_session_with_profile(profile_name, config_path=config_path)
 
 @mcp.tool()
 def start_appium_session(platform: str, server_url: str, capabilities: dict):
     start_session(platform, server_url, capabilities)
-    return "session started"
+    return {"status": "ok", "platform": platform, "server_url": server_url}
 
 @mcp.tool()
 def stop_appium_session():
     stop_session()
-    return "session stopped"
+    return {"status": "ok"}
 
 @mcp.tool()
 def get_screenshot(region: str = "full"):
     driver = get_driver()
     ts = get_current_timestamp()
+    focused_id = LAST_UI_TREE.get("focused") if LAST_UI_TREE else None
 
     base_dir = Path(__file__).resolve().parent
     out_dir = base_dir / "screenshots"
@@ -95,7 +121,6 @@ def get_screenshot(region: str = "full"):
     img = Image.open(BytesIO(png_bytes))
 
     if region == "focused":
-        focused_id = LAST_UI_TREE.get("focused") if LAST_UI_TREE else None
         bounds = get_bounds_by_element_id(focused_id)
 
         if bounds:
@@ -106,7 +131,7 @@ def get_screenshot(region: str = "full"):
             )
             img = img.crop(bounds)
         else:
-            region = "full"  # fallback，永不炸
+            region = "full"  # fallback: do not fail when no focused node is available
 
     img = resize_image(img, max_long=768, max_short=384)
 
@@ -129,7 +154,7 @@ def get_ui_tree():
     driver = get_driver()
     source = driver.page_source  # XML
 
-    elements, ui_w, ui_h = parse_ios_xml(source) # 你可以先只抽 button / textfield
+    elements, ui_w, ui_h = parse_ios_xml(source)  # currently iOS-oriented parser
     focused = get_focused_element_id(elements)
 
     LAST_UI_TREE = {
